@@ -1,0 +1,5 @@
+﻿Conjuction<-BinaryOperation<-Expression
+Disjunction<-BinaryOperation<-Expression
+Implication<-BinaryOperation<-Expression
+Negative<-UnaryOperation<-Expression
+Constant<-Expression
