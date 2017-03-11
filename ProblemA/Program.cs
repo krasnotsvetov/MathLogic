@@ -37,7 +37,7 @@ namespace ProblemA
                     new Axiom("b->a|b"),
                     new Axiom("(a->b)->(c->b)->(a|c->b)"),
                     new Axiom("(a->b)->(a->!b)->!a"),
-                    new Axiom("!!a->b")
+                    new Axiom("!!a->a")
                 };
             }
             public Solver()
