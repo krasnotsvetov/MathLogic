@@ -214,16 +214,55 @@ namespace ProblemD
                     new Implication(alpha, expr)
                 };
             }
-             
+            
+            private IExpression GetMismatch(IExpression baseExpr, IExpression substExpr, Variable var)
+            {
+                switch (baseExpr)
+                {
+                    case ArityOperation ao:
+                        if (substExpr is ArityOperation s && s.Arity == ao.Arity && s.Name == ao.Name)
+                        {
+                            for (int i = 0; i < s.Arity; i++)
+                            {
+                                var ans = GetMismatch(ao.Arguments[i], s.Arguments[i], var);
+                                if (ans != null)
+                                {
+                                    return ans;
+                                }
+                            }
+                        }
+                        return null;
+                    case Quantifier q:
+                        if (substExpr is Quantifier sq && q.Function.Equals(sq.Function))
+                        {
+                            return GetMismatch(q.Expression, sq.Expression, var);
+                        }
+                        return null;
+                    case Variable v:
+                        if (v.Equals(var))
+                        {
+                            return substExpr;
+                        }
+                        return null;
+                }
+                return null;
+            }
 
             public void Run()
             {
+                string header;
+                IExpression toProof = null;
+
+                Dictionary<IExpression, int> cache = new Dictionary<IExpression, int>();
                 var parser = new Parser();
                 IExpression alpha = null;
+                string reason = "";
+                bool isProoveCorrect = true;
                 using (var sr = new StreamReader(new FileStream("test.in", FileMode.Open)))
                 {
-                    string line = sr.ReadLine();
+                    string line = header = sr.ReadLine();
                     var temp = line.Split(new string[] { "|-" }, StringSplitOptions.None);
+                    toProof = parser.Parse(temp[1]);
                     foreach (var s in  CommaSplit(temp[0]))
                     {
                         assumptions.Add(alpha = parser.Parse(s));
@@ -234,10 +273,12 @@ namespace ProblemD
                     }
                 }
 
-
-                foreach (var expr in proof)
+                int i = 0;
+                for  (i = 0; i < proof.Count; i++)
                 {
+                    var expr = proof[i];
                     var isProofed = false;
+                    #region axioms
                     foreach (var axiom in axioms)
                     {
                         if (expr.Equals(axioms))
@@ -250,7 +291,8 @@ namespace ProblemD
                             break;
                         }
                     }
-
+                    #endregion
+                    #region assumptions
                     foreach (var assump in assumptions)
                     {
                         if (expr.Equals(assump))
@@ -263,20 +305,8 @@ namespace ProblemD
                             break;
                         }
                     }
-
-                    foreach (var assump in assumptions)
-                    {
-                        if (expr.Equals(assump))
-                        {
-                            isProofed = true;
-                            if (alpha != null)
-                            {
-                                newProof.AddRange(BaseDeduct(expr, alpha));
-                            }
-                            break;
-                        }
-                    }
-
+                    #endregion
+                    #region axiomSchemes
                     foreach (var axiom in axiomSchemes)
                     {
                         if (axiom.IsMatch(expr))
@@ -289,7 +319,8 @@ namespace ProblemD
                             break;
                         }
                     }
-
+                    #endregion
+                    #region isAlpha
                     if (!isProofed) {
                         if (expr == alpha)
                         {
@@ -297,7 +328,8 @@ namespace ProblemD
                             newProof.AddRange(BaseDeduct(alpha, alpha));
                         }
                     }
-
+                    #endregion
+                    #region induction
                     if (!isProofed)
                     {
                         if (inductionAxiom.IsMatch(expr))
@@ -316,16 +348,242 @@ namespace ProblemD
                                     {
                                         newProof.AddRange(BaseDeduct(expr, alpha));
                                     }
+                                } 
+                            } catch
+                            {
+                                isProoveCorrect = false;
+                                break;
+                            }
+                        }
+                    }
+                    #endregion
+                    #region universal
+                    if (!isProofed)
+                    {
+                        if (universalAxiom.IsMatch(expr))
+                        {
+                            var q = (Quantifier)((ArityOperation)(expr)).Arguments[0];
+
+                            var x = q.Variable;
+                            var f = q.Expression;
+                            var term = GetMismatch(f, ((ArityOperation)expr).Arguments[1], x).Clone();
+                            try
+                            {
+                                if (SubstituteVariableToExpr(f, x, term) == ((ArityOperation)expr).Arguments[1])
+                                {
+                                    isProofed = true;
+                                    if (alpha != null)
+                                    {
+                                        newProof.AddRange(BaseDeduct(expr, alpha));
+                                    }
+                                }
+
+                            } catch
+                            {
+                                reason = $"Терм {term} не свободен для подстановки в формулу {f} вместо {x}";
+                                isProoveCorrect = false;
+                                break;
+                            }
+                        }
+                    }
+                    #endregion
+                    #region existence
+                    if (!isProofed)
+                    {
+                        if (existenceAxiom.IsMatch(expr))
+                        {
+                            var q = (Quantifier)((ArityOperation)(expr)).Arguments[1];
+
+                            var x = q.Variable;
+                            var f = q.Expression;
+                            var term = GetMismatch(f, ((ArityOperation)expr).Arguments[0], x).Clone();
+                            try
+                            {
+                                if (SubstituteVariableToExpr(f, x, term) == ((ArityOperation)expr).Arguments[0])
+                                {
+                                    isProofed = true;
+                                    if (alpha != null)
+                                    {
+                                        newProof.AddRange(BaseDeduct(expr, alpha));
+                                    }
+                                }
+
+                            }
+                            catch
+                            {
+                                reason = $"Терм {term} не свободен для подстановки в формулу {f} вместо {x}";
+                                isProoveCorrect = false;
+                                break;
+                            }
+                        }
+                    }
+                    #endregion
+                    #region M.P
+                    if (!isProofed)
+                    {
+                        for (int j = i - 1; j >= 0; j--)
+                        {
+                            if (proof[j] is Implication impl && impl.Right.Equals(expr) && cache.ContainsKey(impl.Left))
+                            {
+                                isProofed = true;
+                                if (alpha != null)
+                                {
+                                    var t = SubstituteExprsToExpr(axiomSchemes[1].Expression, 
+                                        new Dictionary<string, IExpression>() {
+                                            { "A", alpha },
+                                            { "B", impl.Arguments[0] },
+                                            { "C", expr }
+                                        });
+                                    newProof.AddRange(new IExpression[] {
+                                        t,
+                                        ((ArityOperation)t).Arguments[1],
+                                        ((ArityOperation)((ArityOperation)t).Arguments[1]).Arguments[1] });
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    #endregion
+                    #region universalRule
+                    if (!isProofed)
+                    {
+                        if (expr is Implication impl && impl.Right is Universal uv)
+                        {
+                            var ne = new Implication(impl.Left, uv.Expression);
+                            var x = uv.Variable;
+
+                            if (cache.ContainsKey(ne))
+                            {
+                                var isFree = !SubstituteVariableToExpr(impl.Left, x, new Zero()).Equals(impl.Left);
+                                if (!isFree)
+                                {
+                                    isProofed = true;
+                                    if (alpha != null)
+                                    {
+                                        if (SubstituteVariableToExpr(alpha, x, new Zero()).Equals(alpha))
+                                        {
+                                            using (var sr = new StreamReader(new FileStream("Universal.proof", FileMode.Open)))
+                                            {
+                                                string s;
+                                                while ((s = sr.ReadLine()) != null)
+                                                {
+                                                    newProof.Add(SubstituteExprsToExpr(parser.Parse(s), new Dictionary<string, IExpression>()
+                                                    {
+
+                                                        {"A", alpha },
+                                                        {"B", impl.Left },
+                                                        {"C", uv.Expression },
+                                                        {"x", x }
+                                                    }));
+                                                }
+                                            }
+                                        } else
+                                        {
+                                            isProoveCorrect = false;
+                                            reason = $"Переменная {x} входит свободно в формулу {alpha}";
+                                            break;
+                                        }
+                                    }
+                                } else
+                                {
+                                    isProoveCorrect = false;
+                                    reason = $"Переменная {x} входит свободно в формулу {impl.Left}";
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    #endregion
+                    #region ExistenceRule
+                    if (!isProofed)
+                    {
+                        if (expr is Implication impl && impl.Left is Existence ex)
+                        {
+                            var ne = new Implication(ex.Expression, impl.Right);
+                            var x = ex.Variable;
+
+                            if (cache.ContainsKey(ne))
+                            {
+                                var isFree = !SubstituteVariableToExpr(impl.Right, x, new Zero()).Equals(impl.Right);
+                                if (!isFree)
+                                {
+                                    isProofed = true;
+                                    if (alpha != null)
+                                    {
+                                        if (SubstituteVariableToExpr(alpha, x, new Zero()).Equals(alpha))
+                                        {
+                                            using (var sr = new StreamReader(new FileStream("Existence.proof", FileMode.Open)))
+                                            {
+                                                string s;
+                                                while ((s = sr.ReadLine()) != null)
+                                                {
+                                                    newProof.Add(SubstituteExprsToExpr(parser.Parse(s), new Dictionary<string, IExpression>()
+                                                    {
+
+                                                        {"A", alpha },
+                                                        {"B",  ex.Expression},
+                                                        {"C", impl.Right},
+                                                        {"x", x }
+                                                    }));
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            isProoveCorrect = false;
+                                            reason = $"Переменная {x} входит свободно в формулу {alpha}";
+                                            break;
+                                        }
+                                    }
                                 }
                                 else
                                 {
-
+                                    isProoveCorrect = false;
+                                    reason = $"Переменная {x} входит свободно в формулу {impl.Left}";
+                                    break;
                                 }
-                            } catch
-                            {
-
                             }
                         }
+                    }
+#endregion
+
+                    if (!isProofed || !isProoveCorrect)
+                    {
+                        if (isProoveCorrect)
+                        {
+                            reason = "Не доказано";
+                        }
+                        isProoveCorrect = false;
+                        break;
+                    }
+                    cache[expr] = 1;
+                }
+
+                using (var sw = new StreamWriter(new FileStream("test.out", FileMode.Create)))
+                {
+                    if (isProoveCorrect)
+                    {
+                        if (alpha != null)
+                        {
+                            proof = newProof;
+                            for (int j = 0; j < assumptions.Count - 1; j++)
+                            {
+                                sw.Write(assumptions[i] + (j != assumptions.Count - 1 ? "," : ""));
+                            }
+                            sw.Write("|-");
+                            sw.WriteLine(new Implication(alpha, toProof));
+                        } else
+                        {
+                            sw.WriteLine(header);
+                        }
+                        foreach (var p in newProof)
+                        {
+                            sw.WriteLine(p);
+                        }
+                    }
+                    else
+                    {
+                        sw.WriteLine($"Вывод неверен начиная с формулы номер {i}: [{reason}]");
                     }
                 }
             }

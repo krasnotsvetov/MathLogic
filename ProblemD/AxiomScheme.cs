@@ -48,7 +48,7 @@ namespace ProblemD
                         return true;
                     } 
                 case ArityOperation ao:
-                    if (expr is ArityOperation e && e.Arity == ao.Arity)
+                    if (expr is ArityOperation e && e.Arity == ao.Arity && e.Name.Equals(ao.Name))
                     {
                         for (int i = 0; i < e.Arity; i++)
                         {
@@ -62,6 +62,9 @@ namespace ProblemD
                         return false;
                     }
                     return true;
+                case Quantifier q:
+
+                    return expr is Quantifier eq &&  q.Function.Equals(eq.Function) && _isMatch(q.Expression, eq.Expression, map);
                 default:
                     return false;
             }
