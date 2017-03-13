@@ -30,6 +30,6 @@ namespace PredicateParser.Operators.Logic
                 copyArg.Add(a.Clone());
             }
             return new Predicate((string)Name.Clone(), Arity, copyArg);
-        }
+        } 
     }
 }

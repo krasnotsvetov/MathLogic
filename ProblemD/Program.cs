@@ -21,7 +21,7 @@ namespace ProblemD
         public class Solver
         {
             List<AxiomScheme> axiomSchemes = new List<AxiomScheme>();
-            List<Axiom> axioms = new List<Axiom>();
+            List<IExpression> axioms = new List<IExpression>();
             List<IExpression> assumptions = new List<IExpression>();
             List<IExpression> proof = new List<IExpression>();
             List<IExpression> newProof = new List<IExpression>();
@@ -33,10 +33,13 @@ namespace ProblemD
             public Solver()
             {
                 var p = new Parser();
+                 
+                
 
                 inductionAxiom = new AxiomScheme("F(0)&@x(F(x)->F(x'))->F(x)");
                 existenceAxiom = new AxiomScheme("F(o)->?xF(x)");
                 universalAxiom = new AxiomScheme("@xF(x)->F(o)");
+                 
 
                 axiomSchemes = new List<AxiomScheme>()
                 {
@@ -52,16 +55,16 @@ namespace ProblemD
                     new AxiomScheme("!!A->A")
                 };
 
-                axioms = new List<Axiom>()
+                axioms = new List<IExpression>()
                 {
-                    new Axiom("a=b->a'=b'"),
-                    new Axiom("a=b->a=c->b=c"),
-                    new Axiom("a'=b'->a=b"),
-                    new Axiom("!a'=0"),
-                    new Axiom("a+b'=(a+b)'"),
-                    new Axiom("a+0=a"),
-                    new Axiom("a*0=a"),
-                    new Axiom("a*b'=a*b+a")
+                    p.Parse("a=b->a'=b'"),
+                    p.Parse("a=b->a=c->b=c"),
+                    p.Parse("a'=b'->a=b"),
+                    p.Parse("!a'=0"),
+                    p.Parse("a+b'=(a+b)'"),
+                    p.Parse("a+0=a"),
+                    p.Parse("a*0=a"),
+                    p.Parse("a*b'=a*b+a")
                 };
 
                 selfCons = new List<IExpression>()
@@ -104,25 +107,33 @@ namespace ProblemD
             }
             private IExpression SubstituteVariableToExpr(IExpression baseExpression, Variable x, IExpression y)
             {
+                if (y == null)
+                {
+                    return baseExpression.Clone();
+                }
                 var rv = baseExpression.Clone();
                 Dictionary<Variable, int> closing = new Dictionary<Variable, int>();
-                rv = _substituteVariableToExpr(baseExpression.Clone(), (Variable)x.Clone(), y, closing);
+                rv = _substituteVariableToExpr(rv, (Variable)x.Clone(), y, closing);
                 return rv;
             }
 
             private IExpression _substituteVariableToExpr(IExpression baseExpression, Variable x, IExpression y, Dictionary<Variable, int> closing)
             {
+                if (y.Equals(x))
+                {
+                    return baseExpression;
+                }
                 switch (baseExpression)
                 {
                     case ArityOperation ao:
                         for (int i = 0; i < ao.Arity; i++)
                         {
-                            if (ao.Arguments[i] is Variable v && v == x && (!closing.ContainsKey(v) || closing[v] == 0))
+                            if (ao.Arguments[i] is Variable v && v.Equals(x) && (!closing.ContainsKey(v) || closing[v] == 0))
                             {
                                 bool cantSet(IExpression expr)
                                 {
                                     bool has = false;
-                                    switch (y)
+                                    switch (expr)
                                     {
                                         case ArityOperation yao:
                                             foreach (var arg in yao.Arguments)
@@ -131,11 +142,11 @@ namespace ProblemD
                                             }
                                             break;
                                         case Variable _v:
-                                            return closing.ContainsKey(v) && closing[v] > 0 && v.Value != x.Value;
+                                            return closing.ContainsKey(_v) && closing[_v] > 0 && _v.Value != x.Value;
                                     }
                                     return has;
                                 }
-                                
+
                                 if (cantSet(y))
                                 {
                                     throw new Exception();
@@ -143,13 +154,17 @@ namespace ProblemD
                                 ao.Arguments[i] = y;
                             } else if (!(ao.Arguments[i] is Variable))
                             {
-                                _substituteVariableToExpr(ao.Arguments[i], x, y, closing);
+                                ao.Arguments[i] = _substituteVariableToExpr(ao.Arguments[i], x, y, closing);
                             }
                         }
                         break;
                     case Quantifier q:
+                        if (!closing.ContainsKey(q.Variable))
+                        {
+                            closing[q.Variable] = 0;
+                        }
                         closing[q.Variable]++;
-                        _substituteVariableToExpr(q.Expression, x, y, closing);
+                        q.Expression = _substituteVariableToExpr(q.Expression, x, y, closing);
                         closing[q.Variable]--;
                         break;
                 }
@@ -160,7 +175,7 @@ namespace ProblemD
             private IExpression SubstituteExprsToExpr(IExpression baseExpression, Dictionary<string, IExpression> map)
             {
                 var rv = baseExpression.Clone();
-                rv = _substituteExprsToExpr(baseExpression.Clone(), map);
+                rv = _substituteExprsToExpr(rv, map);
                 return rv;
             }
 
@@ -169,31 +184,20 @@ namespace ProblemD
 
                 switch (baseExpression)
                 {
+                    case Predicate predicate:
+                        return map[predicate.Name];
                     case Variable constant:
                         return map[constant.Value]; 
                     case ArityOperation ao:
                         for (int i = 0; i < ao.Arity; i++)
                         {
                             var arg = ao.Arguments[i];
-                            if (arg is Variable v)
-                            {
-                                arg = map[v.Value];
-                            }
-                            else
-                            {
-                                _substituteExprsToExpr(arg, map);
-                            }
+                            ao.Arguments[i] = _substituteExprsToExpr(arg, map);
                         }
                         break;
                     case Quantifier q:
                         q.Variable = (Variable)map[q.Variable.Value];
-                        if (q.Expression is Variable)
-                        {
-                            q.Expression = map[q.Variable.Value];
-                        } else
-                        {
-                            _substituteExprsToExpr(q.Expression, map);
-                        }
+                        q.Expression = _substituteExprsToExpr(q.Expression, map);
                         break;
                 }
                 return baseExpression;
@@ -219,8 +223,14 @@ namespace ProblemD
             {
                 switch (baseExpr)
                 {
+                    case Zero zero:
+                        if (substExpr is Zero)
+                        {
+                            return null;
+                        }
+                        throw new SkipException();
                     case ArityOperation ao:
-                        if (substExpr is ArityOperation s && s.Arity == ao.Arity && s.Name == ao.Name)
+                        if (substExpr is ArityOperation s && s.Arity == ao.Arity && s.Name.Equals(ao.Name))
                         {
                             for (int i = 0; i < s.Arity; i++)
                             {
@@ -230,14 +240,15 @@ namespace ProblemD
                                     return ans;
                                 }
                             }
+                            return null;
                         }
-                        return null;
+                        throw new SkipException();
                     case Quantifier q:
                         if (substExpr is Quantifier sq && q.Function.Equals(sq.Function))
                         {
                             return GetMismatch(q.Expression, sq.Expression, var);
                         }
-                        return null;
+                        throw new SkipException();
                     case Variable v:
                         if (v.Equals(var))
                         {
@@ -245,7 +256,7 @@ namespace ProblemD
                         }
                         return null;
                 }
-                return null;
+                throw new SkipException();
             }
 
             public void Run()
@@ -273,6 +284,10 @@ namespace ProblemD
                     }
                 }
 
+                if (alpha != null)
+                {
+                    assumptions.Remove(alpha);
+                }
                 int i = 0;
                 for  (i = 0; i < proof.Count; i++)
                 {
@@ -281,7 +296,7 @@ namespace ProblemD
                     #region axioms
                     foreach (var axiom in axioms)
                     {
-                        if (expr.Equals(axioms))
+                        if (expr.Equals(axiom))
                         {
                             isProofed = true;
                             if (alpha != null)
@@ -293,6 +308,7 @@ namespace ProblemD
                     }
                     #endregion
                     #region assumptions
+                    if (!isProofed)
                     foreach (var assump in assumptions)
                     {
                         if (expr.Equals(assump))
@@ -307,6 +323,7 @@ namespace ProblemD
                     }
                     #endregion
                     #region axiomSchemes
+                    if (!isProofed)
                     foreach (var axiom in axiomSchemes)
                     {
                         if (axiom.IsMatch(expr))
@@ -319,13 +336,18 @@ namespace ProblemD
                             break;
                         }
                     }
-                    #endregion
+#endregion 
+
                     #region isAlpha
-                    if (!isProofed) {
-                        if (expr == alpha)
+                    if (!isProofed)
+                    {
+                        if (alpha != null && expr.Equals(alpha))
                         {
                             isProofed = true;
-                            newProof.AddRange(BaseDeduct(alpha, alpha));
+                            foreach (var e in selfCons)
+                            {
+                                newProof.Add(SubstituteExprsToExpr(e, new Dictionary<string, IExpression>() { { "A", expr } }));
+                            }
                         }
                     }
                     #endregion
@@ -340,8 +362,9 @@ namespace ProblemD
                                 var conj = (Conjuction)((Implication)expr).Left;
                                 var quant = (Quantifier)conj.Right;
                                 var x = quant.Variable;
-                                if (SubstituteVariableToExpr(f, x, new Zero()) == ((ArityOperation)(conj).Arguments[0]) &&
-                                    SubstituteVariableToExpr(f, x, new Increment(x)) == ((ArityOperation)quant.Expression).Arguments[1])
+                                if (SubstituteVariableToExpr(f, x, new Zero()).Equals(((ArityOperation)(conj).Arguments[0]))
+                                    &&
+                                    SubstituteVariableToExpr(f, x, new Increment(x)).Equals(((ArityOperation)quant.Expression).Arguments[1]))
                                 {
                                     isProofed = true;
                                     if (alpha != null)
@@ -366,24 +389,34 @@ namespace ProblemD
 
                             var x = q.Variable;
                             var f = q.Expression;
-                            var term = GetMismatch(f, ((ArityOperation)expr).Arguments[1], x).Clone();
+                            //@y(((x)'+y=(x+y)')->((x)'+(y)'=(x+(y)')'))->(x'+0=(x+0)')&@y(((x)'+y=(x+y)')->((x)'+(y)'=(x+(y)')'))
+                            IExpression term = null;
                             try
                             {
-                                if (SubstituteVariableToExpr(f, x, term) == ((ArityOperation)expr).Arguments[1])
+                                term = GetMismatch(f, ((ArityOperation)expr).Arguments[1], x)?.Clone();
+                                try
                                 {
-                                    isProofed = true;
-                                    if (alpha != null)
+                                    if (SubstituteVariableToExpr(f, x, term).Equals(((ArityOperation)expr).Arguments[1]))
                                     {
-                                        newProof.AddRange(BaseDeduct(expr, alpha));
+                                        isProofed = true;
+                                        if (alpha != null)
+                                        {
+                                            newProof.AddRange(BaseDeduct(expr, alpha));
+                                        }
                                     }
-                                }
 
-                            } catch
+                                }
+                                catch
+                                {
+                                    reason = $"Терм {term} не свободен для подстановки в формулу {f} вместо {x}";
+                                    isProoveCorrect = false;
+                                    break;
+                                }
+                            } catch (SkipException)
                             {
-                                reason = $"Терм {term} не свободен для подстановки в формулу {f} вместо {x}";
-                                isProoveCorrect = false;
-                                break;
+
                             }
+                            
                         }
                     }
                     #endregion
@@ -396,24 +429,32 @@ namespace ProblemD
 
                             var x = q.Variable;
                             var f = q.Expression;
-                            var term = GetMismatch(f, ((ArityOperation)expr).Arguments[0], x).Clone();
+
+                            IExpression term = null;
                             try
                             {
-                                if (SubstituteVariableToExpr(f, x, term) == ((ArityOperation)expr).Arguments[0])
+                                term = GetMismatch(f, ((ArityOperation)expr).Arguments[0], x)?.Clone();
+                                try
                                 {
-                                    isProofed = true;
-                                    if (alpha != null)
+                                    if (SubstituteVariableToExpr(f, x, term).Equals(((ArityOperation)expr).Arguments[0]))
                                     {
-                                        newProof.AddRange(BaseDeduct(expr, alpha));
+                                        isProofed = true;
+                                        if (alpha != null)
+                                        {
+                                            newProof.AddRange(BaseDeduct(expr, alpha));
+                                        }
                                     }
-                                }
 
-                            }
-                            catch
+                                }
+                                catch
+                                {
+                                    reason = $"Терм {term} не свободен для подстановки в формулу {f} вместо {x}";
+                                    isProoveCorrect = false;
+                                    break;
+                                }
+                            } catch (SkipException skip)
                             {
-                                reason = $"Терм {term} не свободен для подстановки в формулу {f} вместо {x}";
-                                isProoveCorrect = false;
-                                break;
+
                             }
                         }
                     }
@@ -568,7 +609,7 @@ namespace ProblemD
                             proof = newProof;
                             for (int j = 0; j < assumptions.Count - 1; j++)
                             {
-                                sw.Write(assumptions[i] + (j != assumptions.Count - 1 ? "," : ""));
+                                sw.Write(assumptions[j] + (j != assumptions.Count - 2 ? "," : ""));
                             }
                             sw.Write("|-");
                             sw.WriteLine(new Implication(alpha, toProof));
@@ -576,14 +617,14 @@ namespace ProblemD
                         {
                             sw.WriteLine(header);
                         }
-                        foreach (var p in newProof)
+                        foreach (var p in proof)
                         {
                             sw.WriteLine(p);
                         }
                     }
                     else
                     {
-                        sw.WriteLine($"Вывод неверен начиная с формулы номер {i}: [{reason}]");
+                        sw.WriteLine($"Вывод неверен начиная с формулы номер {i + 1}: [{reason}]");
                     }
                 }
             }

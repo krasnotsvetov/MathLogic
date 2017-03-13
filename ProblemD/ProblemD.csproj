@@ -42,10 +42,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Axiom.cs" />
     <Compile Include="AxiomScheme.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SkipException.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

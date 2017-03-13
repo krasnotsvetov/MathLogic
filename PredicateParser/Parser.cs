@@ -134,8 +134,7 @@ namespace PredicateParser
                 {
 
                 }
-                ctx = saveCtx;
-                ctx.CurrentPosition--;
+                ctx.CurrentPosition = saveCtx.CurrentPosition - 1;
                 return GetPredicate(ctx);
             }
 

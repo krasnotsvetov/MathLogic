@@ -21,6 +21,6 @@ namespace PredicateParser.Operators.Math
                 copyArg.Add(a.Clone());
             }
             return new Function((string)Name.Clone(), Arity, copyArg);
-        }
+        } 
     }
 }

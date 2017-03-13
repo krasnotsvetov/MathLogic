@@ -43,7 +43,7 @@ namespace PredicateParser.Operators
                 {
                     for (int i = 0; i < Arity; i++)
                     {
-                        if (ao.Arguments[i].Equals(Arguments[i]))
+                        if (!ao.Arguments[i].Equals(Arguments[i]))
                         {
                             return false;
                         }

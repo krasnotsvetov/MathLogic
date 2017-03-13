@@ -3,6 +3,7 @@ using PredicateParser.Operators;
 using PredicateParser.Operators.Logic;
 using PredicateParser.Operators.Math;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,6 +31,8 @@ namespace ProblemD
             return _isMatch(Expression, expr, new Dictionary<Predicate, IExpression>());
         }
 
+
+
         private bool _isMatch(IExpression axiom, IExpression expr, Dictionary<Predicate, IExpression> map)
         {
             if (expr is IMath)
@@ -42,11 +45,12 @@ namespace ProblemD
                     if (map.ContainsKey(p))
                     {
                         return map[p].Equals(expr);
-                    } else
+                    }
+                    else
                     {
                         map[p] = expr;
                         return true;
-                    } 
+                    }
                 case ArityOperation ao:
                     if (expr is ArityOperation e && e.Arity == ao.Arity && e.Name.Equals(ao.Name))
                     {
@@ -57,19 +61,18 @@ namespace ProblemD
                                 return false;
                             }
                         }
-                    } else
+                    }
+                    else
                     {
                         return false;
                     }
                     return true;
                 case Quantifier q:
 
-                    return expr is Quantifier eq &&  q.Function.Equals(eq.Function) && _isMatch(q.Expression, eq.Expression, map);
+                    return expr is Quantifier eq && q.Function.Equals(eq.Function) && _isMatch(q.Expression, eq.Expression, map);
                 default:
                     return false;
             }
         }
-
-         
     }
 }
