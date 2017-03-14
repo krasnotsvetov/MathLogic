@@ -52,6 +52,16 @@ namespace ProblemE
                         sw.WriteLine(line);
                     }
                 }
+
+                for (int i = 1; i <= a; i++)
+                using (var sr = new StreamReader(new FileStream("base3.proof", FileMode.Open)))
+                {
+                    string line;
+                    while ((line = sr.ReadLine()) != null)
+                    {
+                        sw.WriteLine(line.Replace("z", numeralFromInt(i)));
+                    }
+                }
                 for (int i = 0; i < b; i++)
                 {
                     string numeralB = numeralFromInt(i);

@@ -47,6 +47,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Base3.proof">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="Base2.proof">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
